@@ -1,5 +1,5 @@
 import flask
-from flask_restful import Api, Resource, reqparse, abort, fields, marshal_with
+from flask_restful import Api, Resource, reqparse, request, abort, fields, marshal_with
 import json
 import subprocess
 import sys
@@ -73,48 +73,51 @@ def get_reports_list_for_tableau():
         return f"Didn't get reports_list details from aws {e.args}"
 
 
-# tableau_put_args = reqparse.RequestParser()
-# tableau_put_args.add_argument("report_name", type=str, help="report_name is required", required=True)
-# tableau_put_args.add_argument("url", type=str, help="url is required", required=True)
-#
-#
-class Tablaeu(Resource):
-    base_url = ''
-    user_name = ''
-    password = ''
-    tableau_url = ''
+tableau_put_args = reqparse.RequestParser()
+tableau_put_args.add_argument("report_name", type=str, help="report_name is required", required=True)
+tableau_put_args.add_argument("challenge", type=str, help="url is required", required=True)
 
-    def get(self, reports_name):
+
+@app.route('/tablaeu', methods=['POST'])
+def query_records():
+    mondy_request = request.get_json()
+    if 'challenge' in mondy_request:
+        return mondy_request
+    else:
         try:
+            reports_name = mondy_request['event']['value']['label']['text']
             results = get_permissions_for_tableau()
             results_reports_list = get_reports_list_for_tableau()
-            self.base_url = results['base_url']
-            self.user_name = results['user']
-            self.password = results['password']
-            self.tableau_url = results_reports_list[reports_name]
-            chrome_driver = get_chrome_driver()
-            open_browser_in_full_screen(chrome_driver, self.base_url)
-            signin_to_tableau(chrome_driver, self.user_name, self.password)
-            open_report = open_expected_report(chrome_driver, results_reports_list[reports_name])
-            if open_report == 1:
-                return "Report_open", 200
+            base_url = results['base_url']
+            user_name = results['user']
+            password = results['password']
+            if 'Close' in reports_name:
+                subprocess.run(['pkill', '-a', '-i', 'Google Chrome'], capture_output=True)
+                return {
+                    'statusCode': 200,
+                    'body': json.dumps('Closed chrome browser')
+                }
             else:
-                return open_report
+                chrome_driver = get_chrome_driver()
+                open_browser_in_full_screen(chrome_driver, base_url)
+                signin_to_tableau(chrome_driver, user_name, password)
+                open_report = open_expected_report(chrome_driver, results_reports_list[reports_name])
+                if open_report == 1:
+                    return {
+                        'statusCode': 200,
+                        'body': json.dumps(f'Open report {reports_name}')
+                    }
+                else:
+                    return {
+                        'statusCode': 404,
+                        'body': json.dumps(f'Faild Open report {reports_name}')
+                    }
         except Exception as e:
-            return f"Can't open the relevant page {e.args}"
-
-    # @marshal_with(resource_fields)
-    # def put(self):
-    #     try:
-    #         args = tableau_put_args.parse_args()
-    #         report = ReportModel(report_name=args['report_name'], url=args['url'])
-    #         db.session.add(report)
-    #         db.session.commit()
-    #         return report, 201
-    #     except Exception as e:
-    #         return f"Can't open the relevant page {e.args}"
+            return {
+                        'statusCode': 404,
+                        'body': json.dumps(f'Faild Open report {e.args}')
+                    }
 
 
-api.add_resource(Tablaeu, "/tableau/<string:reports_name>")
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(debug=True)
