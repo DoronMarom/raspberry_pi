@@ -1,6 +1,7 @@
 import json
 import datetime
 import os
+from pathlib import Path
 
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
@@ -12,7 +13,8 @@ import requests
 
 def signin_to_desirable_web_site(driver, user_name, password, web_site_name):
     try:
-        with open("../raspberry_pi/selenium_config.json", 'r') as element_config:
+        test = Path(__file__).cwd()
+        with open("selenium_config.json", 'r') as element_config:
             elements_ditails = json.loads(element_config.read())
             # Wait until log in and password appears on page
 
@@ -104,11 +106,11 @@ def main():
     data_start_run = datetime.datetime.now()
     time_to_refresh = 1
     number_of_refresh = 0
-    tv_name = 'data_engineer_up'
+    tv_name = 'test2'
     old_report = ''
     chrome_driver = None
     minimaise_page_if_not_first_run = 0
-    os.system('''osascript -e 'display notification "TV NAME DP1"' ''')
+    os.system(f'''osascript -e 'display notification "TV NAME {tv_name}"' ''')
     while True:
         try:
             # Create chrome driver if not exist
@@ -116,26 +118,27 @@ def main():
                 chrome_driver = get_chrome_driver()
             reports_name = get_report_name_according_to_my_tv_name(tv_name)
             if reports_name['report_name'] != old_report:
-                if (old_report=='' or reports_name['report_name']=='Open_Page'):
                     results_reports_list = get_reports_list()
-                    open_browser_in_full_screen(chrome_driver, results_reports_list["Open_Page"][0])
-                else:
-                    results_reports_list = get_reports_list()
-                    results = get_permissions_for_ditails_for_relevant_site()
-                    base_url = results[results_reports_list[reports_name['report_name']][1]]['base_url']
-                    user_name = results[results_reports_list[reports_name['report_name']][1]]['user']
-                    password = results[results_reports_list[reports_name['report_name']][1]]['password']
-                    open_browser_in_full_screen(chrome_driver, base_url)
-                    signin_to_desirable_web_site(chrome_driver, user_name, password,
-                                                 results_reports_list[reports_name['report_name']][1])
-                    open_expected_report(chrome_driver, results_reports_list[reports_name['report_name']][0])
-                    # Only for Tablaeu press on full screen button after open relevant report
-                    if results_reports_list[reports_name['report_name']][1] == 'tablaeu':
-                        if minimaise_page_if_not_first_run:
-                            minimum_maximum_page(chrome_driver)
-                        open_tableau_reports_in_full_screen(chrome_driver)
-                        minimaise_page_if_not_first_run = 1
-                old_report = reports_name['report_name']
+                    web_type=results_reports_list[reports_name['report_name']][1]
+                    if web_type=='general':
+                        results_reports_list = get_reports_list()
+                        open_browser_in_full_screen(chrome_driver, results_reports_list[reports_name['report_name']][0])
+                    else:
+                        results = get_permissions_for_ditails_for_relevant_site()
+                        base_url = results[results_reports_list[reports_name['report_name']][1]]['base_url']
+                        user_name = results[results_reports_list[reports_name['report_name']][1]]['user']
+                        password = results[results_reports_list[reports_name['report_name']][1]]['password']
+                        open_browser_in_full_screen(chrome_driver, base_url)
+                        signin_to_desirable_web_site(chrome_driver, user_name, password,
+                                                     results_reports_list[reports_name['report_name']][1])
+                        open_expected_report(chrome_driver, results_reports_list[reports_name['report_name']][0])
+                        # Only for Tablaeu press on full screen button after open relevant report
+                        if results_reports_list[reports_name['report_name']][1] == 'tablaeu':
+                            if minimaise_page_if_not_first_run:
+                                minimum_maximum_page(chrome_driver)
+                            open_tableau_reports_in_full_screen(chrome_driver)
+                            minimaise_page_if_not_first_run = 1
+                    old_report = reports_name['report_name']
             else:
                 time.sleep(2)
                 data_current_time = datetime.datetime.now()
