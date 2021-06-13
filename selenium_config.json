@@ -1,0 +1,14 @@
+{"tablaeu":{
+
+        "VISIBILITY_OF_ELEMENT":"tb-text-box-input.tb-enable-selection.ng-pristine.ng-untouched.ng-empty.ng-invalid.ng-invalid-required",
+        "USER_NAME_ELEMENT":"tb-text-box-input.tb-enable-selection.ng-pristine.ng-untouched.ng-empty.ng-invalid.ng-invalid-required",
+        "PASSWORD_ELEMENT":"tb-text-box-input.tb-enable-selection.ng-pristine.ng-untouched.ng-empty.ng-invalid.ng-invalid-required",
+        "SIGNIN_BUTTON_ELEMENT":"tb-orange-button.tb-button-login"
+    },
+  "monday":{
+        "VISIBILITY_OF_ELEMENT":"email-input.with-pop-label",
+        "USER_NAME_ELEMENT":"email-input.with-pop-label",
+        "PASSWORD_ELEMENT":"password-input.with-pop-label",
+        "SIGNIN_BUTTON_ELEMENT":"next-button-component"
+    }
+}

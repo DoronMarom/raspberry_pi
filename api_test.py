@@ -1,8 +1,7 @@
-import flask
-from flask_restful import Api, Resource, reqparse, request, abort, fields, marshal_with
 import json
-import subprocess
-import sys
+import datetime
+import os
+
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -10,29 +9,38 @@ from selenium.webdriver.common.by import By
 import time
 import requests
 
-app = flask.Flask(__name__)
-api = Api(app)
 
-
-def signin_to_tableau(driver, user_name, password):
+def signin_to_desirable_web_site(driver, user_name, password, web_site_name):
     try:
-        # Wait until log in and password appears on page
-        wait = WebDriverWait(driver, 10)
-        wait.until(
-            EC.visibility_of_element_located((By.CLASS_NAME, 'tb-text-box-input.tb-enable-selection.ng-pristine.ng'
-                                                             '-untouched.ng-empty.ng-invalid.ng-invalid-required')))
-        # Insert user name
-        content_user_name = driver.find_element_by_class_name('tb-text-box-input.tb-enable-selection.ng-pristine.ng'
-                                                              '-untouched.ng-empty.ng-invalid.ng-invalid-required')
-        content_user_name.send_keys(user_name)
-        # Insert password
-        content_password = driver.find_element_by_class_name(
-            'tb-text-box-input.tb-enable-selection.ng-pristine.ng-untouched.ng-empty.ng-invalid.ng-invalid-required')
-        content_password.send_keys(password)
-        driver.find_element_by_class_name('tb-orange-button.tb-button-login').click()
+        with open("../raspberry_pi/selenium_config.json", 'r') as element_config:
+            elements_ditails = json.loads(element_config.read())
+            # Wait until log in and password appears on page
+
+            wait = WebDriverWait(driver, 10)
+            wait.until(
+                EC.visibility_of_element_located(
+                    (By.CLASS_NAME, elements_ditails[web_site_name]['VISIBILITY_OF_ELEMENT'])))
+            # Insert user name
+            content_user_name = driver.find_element_by_class_name(
+                elements_ditails[web_site_name]['USER_NAME_ELEMENT'])
+            content_user_name.send_keys(user_name)
+            # Insert password
+            content_password = driver.find_element_by_class_name(
+                elements_ditails[web_site_name]['PASSWORD_ELEMENT'])
+            content_password.send_keys(password)
+            driver.find_element_by_class_name(elements_ditails[web_site_name]['SIGNIN_BUTTON_ELEMENT']).click()
         return 1
     except Exception as e:
         return e.args
+
+
+def open_tableau_reports_in_full_screen(driver):
+    try:
+        driver.switch_to.frame(0)
+        driver.find_element_by_xpath('//*[@id="toggle-fullscreen-ToolbarButton"]').click()
+        return 1
+    except Exception as e:
+        return f"Can't open expected report {e.args}"
 
 
 def open_expected_report(driver, url):
@@ -40,9 +48,18 @@ def open_expected_report(driver, url):
         time.sleep(5)
         driver.get(url)
         time.sleep(5)
-        driver.switch_to.frame(0)
-        driver.find_element_by_xpath('//*[@id="toggle-fullscreen-ToolbarButton"]').click()
         return 1
+    except Exception as e:
+        return f"Can't open expected report {e.args}"
+
+
+def minimum_maximum_page(driver):
+    try:
+        driver.find_element_by_xpath('//*[@id="toggle-fullscreen-ToolbarButton"]').click()
+        driver.refresh()
+        time.sleep(2)
+        return 1
+
     except Exception as e:
         return f"Can't open expected report {e.args}"
 
@@ -57,7 +74,7 @@ def get_chrome_driver():
     return driver
 
 
-def get_permissions_for_tableau():
+def get_permissions_for_ditails_for_relevant_site():
     try:
         response = requests.get('https://hfweh1msjb.execute-api.us-east-1.amazonaws.com/v1/tableau')
         return json.loads(response.text)
@@ -65,7 +82,7 @@ def get_permissions_for_tableau():
         return f"Didn't get permissions details from aws {e.args}"
 
 
-def get_reports_list_for_tableau():
+def get_reports_list():
     try:
         response = requests.get('https://ryqx5f2qd1.execute-api.us-east-1.amazonaws.com/v1/tableau-reports-list')
         return json.loads(response.text)
@@ -73,51 +90,66 @@ def get_reports_list_for_tableau():
         return f"Didn't get reports_list details from aws {e.args}"
 
 
-tableau_put_args = reqparse.RequestParser()
-tableau_put_args.add_argument("report_name", type=str, help="report_name is required", required=True)
-tableau_put_args.add_argument("challenge", type=str, help="url is required", required=True)
+def get_report_name_according_to_my_tv_name(tv_name):
+    try:
+        body = json.dumps({"tv_name": tv_name})
+        url = 'https://w64q4i353h.execute-api.us-east-1.amazonaws.com/v1/report-name'
+        response = requests.post(url=url, data=body)
+        return json.loads(response.text)
+    except Exception as e:
+        return f"Didn't get report name"
 
 
-@app.route('/tablaeu', methods=['POST'])
-def query_records():
-    mondy_request = request.get_json()
-    if 'challenge' in mondy_request:
-        return mondy_request
-    else:
+def main():
+    data_start_run = datetime.datetime.now()
+    time_to_refresh = 1
+    number_of_refresh = 0
+    tv_name = 'data_engineer_up'
+    old_report = ''
+    chrome_driver = None
+    minimaise_page_if_not_first_run = 0
+    os.system('''osascript -e 'display notification "TV NAME DP1"' ''')
+    while True:
         try:
-            reports_name = mondy_request['event']['value']['label']['text']
-            results = get_permissions_for_tableau()
-            results_reports_list = get_reports_list_for_tableau()
-            base_url = results['base_url']
-            user_name = results['user']
-            password = results['password']
-            if 'Close' in reports_name:
-                subprocess.run(['pkill', '-a', '-i', 'Google Chrome'], capture_output=True)
-                return {
-                    'statusCode': 200,
-                    'body': json.dumps('Closed chrome browser')
-                }
-            else:
+            # Create chrome driver if not exist
+            if not chrome_driver:
                 chrome_driver = get_chrome_driver()
-                open_browser_in_full_screen(chrome_driver, base_url)
-                signin_to_tableau(chrome_driver, user_name, password)
-                open_report = open_expected_report(chrome_driver, results_reports_list[reports_name])
-                if open_report == 1:
-                    return {
-                        'statusCode': 200,
-                        'body': json.dumps(f'Open report {reports_name}')
-                    }
+            reports_name = get_report_name_according_to_my_tv_name(tv_name)
+            if reports_name['report_name'] != old_report:
+                if (old_report=='' or reports_name['report_name']=='Open_Page'):
+                    results_reports_list = get_reports_list()
+                    open_browser_in_full_screen(chrome_driver, results_reports_list["Open_Page"][0])
                 else:
-                    return {
-                        'statusCode': 404,
-                        'body': json.dumps(f'Faild Open report {reports_name}')
-                    }
+                    results_reports_list = get_reports_list()
+                    results = get_permissions_for_ditails_for_relevant_site()
+                    base_url = results[results_reports_list[reports_name['report_name']][1]]['base_url']
+                    user_name = results[results_reports_list[reports_name['report_name']][1]]['user']
+                    password = results[results_reports_list[reports_name['report_name']][1]]['password']
+                    open_browser_in_full_screen(chrome_driver, base_url)
+                    signin_to_desirable_web_site(chrome_driver, user_name, password,
+                                                 results_reports_list[reports_name['report_name']][1])
+                    open_expected_report(chrome_driver, results_reports_list[reports_name['report_name']][0])
+                    # Only for Tablaeu press on full screen button after open relevant report
+                    if results_reports_list[reports_name['report_name']][1] == 'tablaeu':
+                        if minimaise_page_if_not_first_run:
+                            minimum_maximum_page(chrome_driver)
+                        open_tableau_reports_in_full_screen(chrome_driver)
+                        minimaise_page_if_not_first_run = 1
+                old_report = reports_name['report_name']
+            else:
+                time.sleep(2)
+                data_current_time = datetime.datetime.now()
+                diff = data_current_time - data_start_run
+                diff_in_second = diff.seconds
+                diff_in_hour = diff_in_second / 3600
+                local_refresh_counter = number_of_refresh + 1
+                if local_refresh_counter <= diff_in_hour:
+                    chrome_driver.refresh()
+                    number_of_refresh += 1
         except Exception as e:
-            return {
-                        'statusCode': 404,
-                        'body': json.dumps(f'Faild Open report {e.args}')
-                    }
+            return f"Report didn't open {e.args}"
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    main()
+
