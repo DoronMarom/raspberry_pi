@@ -153,6 +153,8 @@ def main():
                     number_of_refresh += 1
         except Exception as e:
             return f"Report didn't open {e.args}"
+        finally:
+            continue
 
 
 if __name__ == "__main__":
