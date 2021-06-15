@@ -13,8 +13,9 @@ import requests
 
 def signin_to_desirable_web_site(driver, user_name, password, web_site_name):
     try:
-        test = Path(__file__).cwd()
-        with open("selenium_config.json", 'r') as element_config:
+        signIn_locations = Path(__file__).cwd()
+        selenium_config = Path.joinpath(signIn_locations,"selenium_config.json")
+        with open(selenium_config, 'r') as element_config:
             elements_ditails = json.loads(element_config.read())
             # Wait until log in and password appears on page
 
@@ -105,7 +106,7 @@ def get_report_name_according_to_my_tv_name(tv_name):
 def main():
     data_start_run = datetime.datetime.now()
     number_of_refresh = 0
-    tv_name = 'test2'
+    tv_name = 'Data_Engineer_1'
     old_report = ''
     chrome_driver = None
     minimaise_page_if_not_first_run = 0
